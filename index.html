@@ -1,0 +1,737 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>hello phaser!</title>
+        <link rel="stylesheet" href="assets/css/main.css">
+        <script src="phaser/build/phaser.min.js"></script>
+
+    </head>
+    <body>
+    <div id="gameScene">
+        <script type="text/javascript">
+            //Танк ИИ
+            enemyTank = function (index, game, player, bullets) {
+                //Внутренние переменные
+                //this.fieldArray = fieldArray;
+                //Генерация позиции появления врагов
+                let nextFireEnemyBullet = 0;
+                let startXY = {};
+                this.game = game;
+
+                function startPosition() {
+                    let line = game.width/64, column = game.height/64;
+                    for (let i = 0; i < column; i++){
+                        for (let j = line-1/*Math.floor(line/2)*/; j < line; j++){
+
+                            //if (fieldArray[i][j] > 3){
+                                let randomCell = game.rnd.integerInRange(0, 1);
+                                if (randomCell === 1) {
+                                    //fieldArray[i][j] = null;
+                                    startXY.x = j*64+32;
+                                    startXY.y = i*64+32;
+
+                                    return startXY;
+                                }
+                                else continue;
+                            //}
+                        }
+                    }
+                }
+
+                startPosition();
+                this.player = player;
+                this.bullets = bullets;
+                //this.fire = fire;
+                this.fireRate = 1000;
+                //this.nextFire = 0;
+
+                //Создание танка ИИ
+                this.enemy = game.add.sprite(startXY.x, startXY.y, 'tank');
+                this.enemy.anchor.setTo(0.5, 0.5);
+                this.enemy.health = 150;
+                this.enemy.key = 'enemyTank';
+                this.game.physics.arcade.enable(this.enemy);
+                this.enemy.body.collideWorldBounds=true;
+                this.enemy.name = index.toString();
+                this.enemy.body.checkCollision = true;
+
+                //Клавиши для управления вторым танком, проверка ИИ
+                let w=0;
+                let s=0;
+                let a=0;
+                let d=0;
+
+                //Шкала здоровья ИИ
+                let healthScaleEnemy;
+                let healthScaleEnemyBackground;
+                let healthCoef;
+
+                //Шкала здоровья Игорька
+                healthScaleEnemyBackground = game.add.sprite(this.enemy.x-26, this.enemy.y-32, 'health_background');
+                healthScaleEnemyBackground.width = this.enemy.width;
+                healthScaleEnemy = game.add.sprite(this.enemy.x-26, this.enemy.y-32, 'health');
+                healthCoef = healthC(this.enemy, healthCoef);
+
+                this.healthScaleEnemyBackground = healthScaleEnemyBackground;
+                this.healthScaleEnemy = healthScaleEnemy;
+                this.healthCoef = healthCoef;
+
+                /*if (this.enemy.angle === 0){
+                    this.enemy.body.checkCollision.right = true;
+                }
+                else if (this.enemy.angle === 90){
+                    this.enemy.body.checkCollision.down = true;
+                }
+                else if (this.enemy.angle === -180){
+                    this.enemy.body.checkCollision.left = true;
+                }
+                else if (this.enemy.angle === -90){
+                    this.enemy.body.checkCollision.up = true;
+                }*/
+
+                //Передвижение ИИ
+                let coordinates = {
+                        playerX : null,
+                        playerY : null
+                };
+
+                this.moveEnemy = function(enemy, player) {
+                    enemy.body.velocity.x = 0;
+                    enemy.body.velocity.y = 0;
+                    if (coordinates.playerX === null && coordinates.playerY === null) {
+                        /*if (player.x>game.width-26){coordinates.playerX = player.x-26;}
+                        else if (player.x<game.width-26){coordinates.playerX = player.x+26;}*/
+                        coordinates.playerX = player.x;
+                        /*if (player.y>game.height-26){coordinates.playerY = player.y-26;}
+                        else if (player.y<game.height-26){coordinates.playerY = player.y+26;}*/
+                        coordinates.playerY = player.y;
+                    }
+                    else if (coordinates.playerX >= enemy.x-4 && coordinates.playerX <= enemy.x+4)
+                    {
+                        coordinates.playerX = null;
+                    }
+                    else if (coordinates.playerY >= enemy.y-4 && coordinates.playerY<= enemy.y+4)
+                    {
+                        coordinates.playerY = null;
+                    }
+                    else if (coordinates.playerX>game.width-26 || coordinates.playerX < 26){
+                        coordinates.playerX = null;
+                    }
+                    else if (coordinates.playerY>game.height-26 || coordinates.playerY < 26){
+                        coordinates.playerY = null;
+                    }
+                    let deltaX = coordinates.playerX - enemy.x;
+                    let deltaY = coordinates.playerY - enemy.y;
+                    function moveX() {
+                        if (deltaX < 0) {
+                            enemy.angle = -180;
+                            enemy.body.velocity.x = game.rnd.integerInRange(-55, -95);
+                        }
+                        else if (deltaX > 0) {
+                            enemy.angle = 0;
+                            enemy.body.velocity.x = game.rnd.integerInRange(55, 95);
+                        }
+                    }
+                    function moveY() {
+                        if (deltaY < 0)
+                        {
+                            enemy.angle = -90;
+                            enemy.body.velocity.y = game.rnd.integerInRange(-55, -95);
+                        }
+                        else if (deltaY > 0)
+                        {
+                            enemy.angle = 90;
+                            enemy.body.velocity.y = game.rnd.integerInRange(55, 95);
+                        }
+                    }
+                    if (coordinates.playerX>=coordinates.playerY) {
+                        moveX();
+                    }
+                    else {
+                        moveY();
+                    }
+                };
+
+                //Выстрел ИИ
+                this.fireEnemyBullet = function () {
+                    let enemyTankAnge = this.enemy.angle;
+                    if (game.time.now > nextFireEnemyBullet && bullets.countDead() > 0)
+                    {
+                        nextFireEnemyBullet = game.time.now + fireRate;
+                        let bullet = bullets.getFirstExists(false);
+                        bullet.damage = game.rnd.integerInRange(35, 65);
+                        if (bullet) {
+                            if (enemyTankAnge === 0){
+                                bullet.angle = 0;
+                                bullet.reset(this.enemy.x+38, this.enemy.y);
+                                bullet.body.velocity.x = 450;
+                            }
+                            else if (enemyTankAnge === -90){
+                                bullet.angle = -90;
+                                bullet.reset(this.enemy.x, this.enemy.y-38);
+                                bullet.body.velocity.y = -450;
+                            }
+                            else if (enemyTankAnge === -180){
+                                bullet.angle = -180;
+                                bullet.reset(this.enemy.x-38, this.enemy.y);
+                                bullet.body.velocity.x = -450;
+                            }
+                            else if (enemyTankAnge === 90){
+                                bullet.angle = 90;
+                                bullet.reset(this.enemy.x, this.enemy.y+38);
+                                bullet.body.velocity.y = 450;
+                            }
+                        }
+                    }
+                };
+
+                //Объезд препятствий
+                this.getAround = function  (enemy, group){
+                    //if (group.name = "brick") {enemy.fireEnemyBullet}
+                    let deltaAroundX = enemy.x - group.x;
+                    if (deltaAroundX<0) deltaAroundX *=-1;
+                    let deltaAroundY = enemy.y - group.y;
+                    if (deltaAroundY<0) deltaAroundY *=-1;
+
+                    if (enemy.angle === 90){
+                        s += 1;
+                        if (s === 1){
+                            coordinates.playerX = (enemy.x + deltaAroundX) - 64;
+                            coordinates.playerY = group.y+64;//enemy.y
+                            //console.log('Enemy angle 90 - 68',enemy.x, group.y, deltaAroundX)
+                            //playerY = null;
+                        }
+                        else if (s === 2){
+                            coordinates.playerX = (enemy.x + deltaAroundX) + 64;
+                            coordinates.playerY = group.y-64;//enemy.y;//
+                            //console.log('Enemy angle 90 + 68',enemy.x, group.y, deltaAroundX)
+                            //playerY = null;
+                        }
+                        else if (s === 3){
+                            coordinates.playerX = game.rnd.integerInRange(26, game.width-26);
+                            coordinates.playerY = game.rnd.integerInRange(26, game.height-26);
+                            s=0;
+                        }
+                    }
+                    else if (enemy.angle === -90) {
+                        w +=1;
+                        if (w === 1){
+                            coordinates.playerX = (enemy.x + deltaAroundX) + 64;
+                            coordinates.playerY = group.y+64;//enemy.y
+                            //console.log('Enemy angle -90 + 68',enemy.x, group.y, deltaAroundX)
+                            //playerY = null;
+                        }
+                        else if (w === 2){
+                            coordinates.playerX = (enemy.x + deltaAroundX) - 64;
+                            coordinates.playerY = group.y-64;//enemy.y
+                            //console.log('Enemy angle -90 - 68',enemy.x, group.y, deltaAroundX)
+                            //playerY = null;
+                        }
+                        else if (w === 3){
+                            coordinates.playerX = game.rnd.integerInRange(26, game.width-26);
+                            coordinates.playerY = game.rnd.integerInRange(26, game.height-26);
+                            w=0;
+                        }
+                    }
+                    else if (enemy.angle === 0) {
+                        d += 1;
+                        if (d === 1){
+                            coordinates.playerY = (enemy.y + deltaAroundY) + 64;
+                            coordinates.playerX = enemy.x;
+                            //console.log('Enemy angle 0 - 68',enemy.x, group.y, deltaAroundX)
+                            //playerX = null;
+                        }
+                        else if (d === 2){
+                            coordinates.playerY = (enemy.y + deltaAroundY) - 68;
+                            coordinates.playerX = enemy.x;
+                            //console.log('Enemy angle 0 + 68',enemy.x, group.y, deltaAroundX)
+                            //playerX = null;
+                        }
+                        else if (d === 3){
+                            d=0;
+                            coordinates.playerX = game.rnd.integerInRange(26, game.width-26);
+                            coordinates.playerY = game.rnd.integerInRange(26, game.height-26);
+                        }
+                    }
+                    else if (enemy.angle === -180) {
+                        a+=1;
+                        if (a === 1){
+                            coordinates.playerY = (enemy.y + deltaAroundY) - 64;
+                            coordinates.playerX = enemy.x;
+                            //console.log('Enemy angle -180 - 68',enemy.x, group.y, deltaAroundX)
+                            //playerX = null;
+                        }
+                        else if (a === 2){
+                            coordinates.playerY = (enemy.y + deltaAroundY) + 64;
+                            //console.log('Enemy angle -180 + 68',enemy.x, group.y, deltaAroundX);
+                            coordinates.playerX = enemy.x;
+                            //playerX = null;
+                        }
+                        else if (a === 3){
+                            coordinates.playerY = null;
+                            coordinates.playerX = game.rnd.integerInRange(26, game.width-26);
+                            coordinates.playerY = game.rnd.integerInRange(26, game.height-26);
+                            a=0;
+                        }
+                    }
+                    if (coordinates.playerX>game.width-26 || coordinates.playerX < 26){
+                        coordinates.playerX = null;
+                    }
+                    if (coordinates.playerY>game.height-26 || coordinates.playerY < 26){
+                        coordinates.playerY = null;
+                    }
+
+                    return coordinates;
+                };
+            };
+
+            let game = new Phaser.Game(960, 640, Phaser.AUTO, 'gameScene',
+                { preload: preload, create: create, update: update, render: render }, true);
+
+            function preload ()
+            {
+                game.load.image('tank', 'assets/sprites/tank.png');
+                game.load.image('chicken', 'assets/sprites/usa_gerb.png');
+                game.load.spritesheet('world', 'assets/sprites/world_64_1.png', 64, 64, 4);
+                game.load.spritesheet('boom', 'assets/sprites/explosion.png', 64, 64, 23);
+
+                game.load.image('earth', 'assets/sprites/earth.png');
+                game.load.image('health', 'assets/sprites/health_scale.png');
+                game.load.image('health_background', 'assets/sprites/health_scale_background.png');
+
+                game.load.image('bullet', 'assets/sprites/bullet_22.png');
+            }
+
+            //Игровой мир
+            let group;
+            let fieldArray = [];
+            let enemies = [];
+            let enemiesTotal = 5;
+            let killedBricks = [];
+            //Переменные Игорька
+            let player;
+            let cursors;
+            let spaceKey;
+            let bullets;
+            let healthScalePlayer;
+            let healthScalePlayerBackground;
+            let playerHealthCoef;
+
+            let spriteDistance;
+            let spriteAngle;
+
+            //let healthCoef = new Map();
+
+            //Тестирование "дальномера"
+            //let fire;
+
+            let chicken;
+            let chickenHealthCoef;
+            let healthScaleChicken;
+            let healthScaleChickenBackground;
+
+            let enemyBullets;
+            //let enemyTanks;
+
+            let bulletBoom;
+            let nextFire = 0;
+            let fireRate = 1000; //1000
+
+            let enemyAnge;
+
+
+
+            //let spriteDistance;
+            //let spriteAnge;
+
+            /*let playerX = null;
+            let playerY = null;
+            let deltaX;
+            let deltaY;*/
+            //let line;
+            //let laser;
+            //let laserDistance;
+
+
+
+            function create ()
+            {
+                //line = new Phaser.Line(handle1.x, handle1.y, handle2.x, handle2.y);
+
+                //Resize our game world to be a 960 x 640 square
+                game.world.setBounds(0, 0, 960, 640);
+                game.add.tileSprite(0, 0, 960, 640, 'earth');
+
+                //Добавление танка
+                player = game.add.sprite(26, 26, 'tank');
+                player.anchor.setTo(0.5, 0.5);
+                player.health=10000;
+                game.physics.arcade.enable(player);
+                player.body.collideWorldBounds=true;
+
+                //Шкала здоровья Игорька
+                healthScalePlayerBackground = game.add.sprite(player.x-26, player.y-32, 'health_background');
+                healthScalePlayerBackground.width = player.width;
+                healthScalePlayer = game.add.sprite(player.x-26, player.y-32, 'health');
+                playerHealthCoef = healthC(player, playerHealthCoef);
+                //playerHealthCoef = player.health/player.width;
+
+                //game.physics.arcade.enable(healthScalePlayer);
+
+
+                //Вражья курва
+                chicken = game.add.sprite(game.width - 64, game.height/2, 'chicken');
+                chicken.anchor.setTo(0.5, 0.5);
+                chicken.health=500;
+                game.physics.arcade.enable(chicken);
+                chicken.body.immovable = true;
+                //player.body.collideWorldBounds=true;
+
+                //Шкала здоровья Курицы
+                healthScaleChickenBackground = game.add.sprite(chicken.x-26, chicken.y-32, 'health_background');
+                healthScaleChickenBackground.width = chicken.width;
+                healthScaleChicken = game.add.sprite(chicken.x-26, chicken.y-32, 'health');
+                chickenHealthCoef = healthC(chicken, chickenHealthCoef);
+                //chickenHealthCoef = player.health/player.width;
+                //Пули ИИ
+                enemyBullets = game.add.group();
+                enemyBullets.enableBody = true;
+                enemyBullets.physicsBodyType = Phaser.Physics.ARCADE;
+                enemyBullets.createMultiple(20, 'bullet');
+                enemyBullets.callAll('anchor.setTo', 'anchor', 0.5, 0.5);
+                enemyBullets.setAll('outOfBoundsKill', true);
+                enemyBullets.setAll('checkWorldBounds', true);
+
+                //Вражина
+
+                createEnemy();
+
+                //Взрыв
+                bulletBoom = game.add.group();
+                for (let i = 0; i < 10; i++) {
+                    let explosionAnimation = bulletBoom.create(0, 0, 'boom', 0, false);
+                    explosionAnimation.anchor.setTo(0.5, 0.5);
+                    explosionAnimation.animations.add('boom');
+                }
+
+                //Добавление модели пули
+                bullets = game.add.group();
+                bullets.enableBody = true;
+                bullets.physicsBodyType = Phaser.Physics.ARCADE;
+                bullets.createMultiple(20, 'bullet');
+                bullets.callAll('anchor.setTo', 'anchor', 0.5, 0.5);
+                bullets.setAll('outOfBoundsKill', true);
+                bullets.setAll('checkWorldBounds', true);
+
+                //Группа объектов игрового поля
+                group = game.add.group();
+                group.enableBody = true;
+                group.physicsBodyType = Phaser.Physics.ARCADE;
+
+                let line = game.width/64, column = game.height/64;
+                fieldArray = [];
+                for (let i = 0; i < column; i++) {
+                    fieldArray[i] = [];
+                    for (let j = 0; j < line; j++) {
+                        //fieldArray[i][j] = item;
+                        if (i >= column / 2 - 2 && j >= (line - 2) || i <= column / 2 + 2 && j >= (line - 2) ||
+                            i >= column / 2 - 2 && j === (line - 4) || i <= column / 2 + 2 && j === (line - 4)) continue;
+                        //let fieldItem = null;
+                        if (j !== 0 && j !== line - 1) {
+                            let fieldItem = game.rnd.integerInRange(0, 6);
+                            if (i>column/2-2 && j===(line-3) && i<column/2+1 && j===(line-3)){console.log(i<=column/2+2,j,fieldItem);fieldItem = 1;}
+                            // Заполнение поля, для добавления элементов - сравнивать генератор с спрайтом world
+                            if (fieldItem > 3) fieldArray[i][j] = null;
+                            //
+                            else {
+                                let c = group.create(j * 64 + 32, i * 64 + 32, 'world', fieldItem);
+                                c.body.immovable = true;
+                                c.anchor.setTo(0.5, 0.5);
+                                if (fieldItem === 3) {
+                                    c.name = "forest";
+                                    c.body.enable = false;
+                                } else if (fieldItem === 2) {
+                                    c.name = "sea";
+                                } else if (fieldItem === 1) {
+                                    c.name = "steel";
+                                } else if (fieldItem === 0) {
+                                    c.name = "brick";
+                                    c.health = 100;
+                                }
+                            }
+                            fieldArray[i][j] = fieldItem;
+                        }
+                    }
+                }
+
+                //Клавиши управления
+                spaceKey = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
+                cursors = game.input.keyboard.createCursorKeys();
+
+                //fps
+                //game.time.advancedTiming = true;
+
+                game.time.events.repeat(Phaser.Timer.SECOND * 60, 10, createEnemy, this);
+            }
+
+            //Вспомогательные функции
+            function healthC(player, healthC) {
+                return healthC = player.health/player.width;
+            }
+
+            //Шкала здоровья (Доработать функцию... после создания классов)
+
+            function HealthScale (player, healthCoef, healthScale, healthScaleBackground) {
+                if (player.alive === false){
+                    healthScale.width = 0;
+                    healthScaleBackground.width = 0;
+                    healthScale.kill();
+                    healthScaleBackground.kill();
+                }
+                else if (player.alive){
+                    if (player.y<32){
+                        healthScaleBackground.y = player.y + (player.width/2+5);
+                        healthScale.y = player.y + (player.width/2+5);
+                    }
+                    else {
+                        healthScaleBackground.y = player.y - (player.width/2+10);
+                        healthScale.y = player.y - (player.width/2+10);
+                    }
+                    healthScaleBackground.x = player.x - player.width/2;
+                    healthScale.x = player.x - player.width/2;
+
+                    healthScale.width = player.health/healthCoef;
+                    //console.log(player.hasOwnProperty(player.height));
+                }
+            }
+            //Генерация противников
+            function  createEnemy() {
+                for (let i = 0; i < enemiesTotal; i++)
+                {
+                    enemies.push(new enemyTank(i, game, player, enemyBullets));
+                }
+                return enemies;
+            }
+
+            /*function lineOverlap (line, group){
+                if (group.name === "steel"){
+
+                    laserDistance = game.physics.arcade.distanceBetween(enemy, item);
+                    return laserResult = false;
+                }
+            }*/
+
+            // Destroy the bullet
+            function resetBullet(item, bullet) {
+
+                if (item.name === "steel"){
+                    bullet.kill();
+                    //return;
+                }
+                if (item.name === "brick") {
+                    if (item.alive === true){
+                        item.health = item.health - bullet.damage;
+                        item.alpha = .6;
+                        bullet.kill();
+                        if (item.health < 0){
+                            let explosionAnimation = bulletBoom.getFirstExists(false);
+                            explosionAnimation.reset(item.x, item.y);
+                            explosionAnimation.play('boom', 30, false, true);
+                            item.alive = false;
+
+                            //console.log("Kill", item);
+                            item.kill();
+                            killedBricks.push(item);
+                            //item.body = null;
+                            //item.remove();
+                            //console.log(item);
+                        }
+                    }
+                }
+                if (item === player){
+                    item.health = item.health - bullet.damage;
+                    item.alpha = .6;
+                    bullet.kill();
+                    if (item.health < 0){
+                        let explosionAnimation = bulletBoom.getFirstExists(false);
+                        explosionAnimation.reset(item.x, item.y);
+                        explosionAnimation.play('boom', 30, false, true);
+                        item.alive = false;
+                        item.kill();
+                    }
+                }
+                if (item === chicken){
+                    item.health = item.health - bullet.damage;
+                    item.alpha = .6;
+                    bullet.kill();
+                    if (item.health < 0){
+                        let explosionAnimation = bulletBoom.getFirstExists(false);
+                        explosionAnimation.reset(item.x, item.y);
+                        explosionAnimation.play('boom', 30, false, true);
+                        item.alive = false;
+                        item.kill();
+                    }
+                }
+                if (item.key === 'bullet' && bullet.key === 'bullet'){
+
+                    let explosionAnimation = bulletBoom.getFirstExists(false);
+                    explosionAnimation.reset(item.x, item.y);
+                    explosionAnimation.play('boom', 30, false, true);
+                    item.kill();
+                    bullet.kill();
+                }
+
+                if (item.key === 'enemyTank'){
+                    item.health = item.health - bullet.damage;
+                    item.alpha = .6;
+                    bullet.kill();
+                    if (item.health < 0){
+                        let explosionAnimation = bulletBoom.getFirstExists(false);
+                        explosionAnimation.reset(item.x, item.y);
+                        explosionAnimation.play('boom', 30, false, true);
+                        item.alive = false;
+                        item.kill();
+                        //item.body=null;
+                        //item.destroy(true,false);
+                    }
+                }
+            }
+            // Выстрел Игорька!
+            function fireBullet() {
+                if (game.time.now > nextFire && bullets.countDead() > 0)
+                {
+                    nextFire = game.time.now + fireRate;
+                    let bullet = bullets.getFirstExists(false);
+                    bullet.damage = game.rnd.integerInRange(35, 65);
+                    if (bullet) {
+                        let spriteAnge = player.angle;
+                        if (spriteAnge===0){
+                            bullet.angle = 0;
+                            bullet.reset(player.x+38, player.y);
+                            bullet.body.velocity.x = 450;
+                        }
+                        else if (spriteAnge===-90){
+                            bullet.angle = -90;
+                            bullet.reset(player.x, player.y-38);
+                            bullet.body.velocity.y = -450;
+                        }
+                        else if (spriteAnge===-180){
+                            bullet.angle = -180;
+                            bullet.reset(player.x-38, player.y);
+                            bullet.body.velocity.x = -450;
+                        }
+                        else if (spriteAnge===90){
+                            bullet.angle = 90;
+                            bullet.reset(player.x, player.y+38);
+                            bullet.body.velocity.y = 450;
+                        }
+                    }
+                }
+            }
+
+            function update ()
+            {
+                for (let i =0; i<enemies.length; i++){
+                    HealthScale(enemies[i].enemy, enemies[i].healthCoef,
+                        enemies[i].healthScaleEnemy, enemies[i].healthScaleEnemyBackground);
+                    if (enemies[i].enemy.alive && player.alive){
+
+                        if (chicken.alive === false){
+                            enemies[i].enemy.alive = false;
+                            let explosionAnimation = bulletBoom.getFirstExists(false);
+                            explosionAnimation.reset(enemies[i].enemy.x, enemies[i].enemy.y);
+                            explosionAnimation.play('boom', 30, false, true);
+                            enemies[i].enemy.kill();
+                        }
+                        //game.physics.arcade.collide(chicken, player);
+                        game.physics.arcade.collide(enemies[i].enemy, player);
+                        game.physics.arcade.collide(enemies[i].enemy, group, enemies[i].getAround, null, this);
+                        game.physics.arcade.overlap(enemies[i].enemy, bullets, resetBullet, null, this);
+
+                        enemies[i].moveEnemy(enemies[i].enemy, player);
+                        spriteDistance = game.physics.arcade.distanceBetween(enemies[i].enemy, player);
+                        spriteAngle = Phaser.Math.radToDeg(game.physics.arcade.angleBetween(enemies[i].enemy, player));
+                        enemyAnge = enemies[i].enemy.angle;
+                            if (
+                                    spriteDistance<500 && enemyAnge === 0 && spriteAngle>=-15 && spriteAngle<=15 ||
+                                    spriteDistance<500 && enemyAnge === -90 && spriteAngle<=-75 && spriteAngle>=-105 ||
+                                    spriteDistance<500 && enemyAnge === -180 && spriteAngle<=-165 && spriteAngle>=-180 ||
+                                    spriteDistance<500 && enemyAnge === -180 && spriteAngle>=165 && spriteAngle<=180 ||
+                                    spriteDistance<500 && enemyAnge === 90 && spriteAngle>=75 && spriteAngle<=105) {
+
+                                    enemies[i].fireEnemyBullet();
+                                }
+                            }
+                    }
+                for (let i in killedBricks){killedBricks[i].destroy();}
+                game.physics.arcade.collide(player, group);
+                game.physics.arcade.collide(player, chicken);
+                //Пуля не дура...
+                game.physics.arcade.overlap(chicken, bullets, resetBullet, null, this);
+                game.physics.arcade.overlap(group, bullets, resetBullet, null, this);
+                game.physics.arcade.overlap(group, enemyBullets, resetBullet, null, this);
+                game.physics.arcade.overlap(bullets, enemyBullets, resetBullet, null, this);
+                game.physics.arcade.overlap(player, enemyBullets, resetBullet, null, this);
+
+                HealthScale(player, playerHealthCoef, healthScalePlayer, healthScalePlayerBackground);
+                HealthScale(chicken, chickenHealthCoef, healthScaleChicken, healthScaleChickenBackground);
+
+                //Управление танком Игорька
+                //enemyHealthScale (player);
+                player.body.velocity.x = 0;
+                player.body.velocity.y = 0;
+
+                if (cursors.left.isDown)
+                {
+                    if (player.angle!==-180){
+                        player.angle = -180;
+                    }
+                    player.body.velocity.x = -75;
+                }
+                else if (cursors.right.isDown)
+                {
+                    if (player.angle!==0){
+                        player.angle = 0;
+                    }
+                    player.body.velocity.x = 75;
+                }
+
+                else if (cursors.up.isDown)
+                {
+                    if (player.angle!==-90){
+                        player.angle = -90;
+                    }
+                    player.body.velocity.y = -75;
+                }
+                else if (cursors.down.isDown)
+                {
+                    if (player.angle!==90){
+                        player.angle = 90;
+                    }
+                    player.body.velocity.y = 75;
+                }
+                if (spaceKey.justDown) {
+                    fireBullet();
+                }
+            }
+
+            function render() {
+                //game.debug.spriteBounds(enemy);
+                //game.debug.spriteInfo(enemy, 32, 32, "#00ff00");
+                //game.debug.geom(lineSprite);
+                //game.debug.lineInfo(line, 32, 132);
+                //game.debug.spriteInfo(player, 32, 128, "#00ff00");
+                //game.debug.text('Active Bullets: ' + enemyBullets.countLiving() + ' / ' + bullets.length, 32, 32);
+                //game.debug.text('laserDistance ' + laserDistance, 400, 14, "#00ff00");//game.time.fps,);
+                //game.debug.text(fire, 800, 14, "#00ff00");//game.time.fps,);
+                //game.debug.text(Phaser.Math.radToDeg(game.physics.arcade.angleBetween(enemy, player)), 32, 240, "#ff0000");
+                //game.debug.text('distanceBetween ' + game.physics.arcade.distanceBetween(enemy, player), 400, 14, "#00ff00");
+                //game.debug.spriteCoords(bullets,32,32)
+                //game.debug.spriteCorners(bullets, true, true);
+
+            }
+        </script>
+    </div>
+    </body>
+</html>
